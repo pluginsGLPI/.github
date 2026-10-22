@@ -1,0 +1,40 @@
+name: "Sync organization files"
+
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "sync/**"
+      - ".github/scripts/sync.sh"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Only print the changes, do not push"
+        type: "boolean"
+        default: true
+
+concurrency:
+  group: "${{ github.workflow }}"
+
+jobs:
+  sync:
+    name: "Sync organization files"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v7"
+      - name: "Generate app token"
+        id: "app-token"
+        uses: "actions/create-github-app-token@v3"
+        with:
+          client-id: "${{ vars.SYNC_APP_CLIENT_ID }}"
+          private-key: "${{ secrets.SYNC_APP_PRIVATE_KEY }}"
+          owner: "${{ github.repository_owner }}"
+      - name: "Sync files"
+        run: ".github/scripts/sync.sh"
+        env:
+          GH_TOKEN: "${{ steps.app-token.outputs.token }}"
+          DRY_RUN: "${{ inputs.dry-run || 'false' }}"

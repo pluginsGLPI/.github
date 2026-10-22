@@ -1,0 +1,3 @@
+# Paths removed from every target repository, provided by the organization defaults instead
+.github/pull_request_template.md
+.github/ISSUE_TEMPLATE

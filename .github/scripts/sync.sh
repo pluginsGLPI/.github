@@ -29,10 +29,15 @@ while read -r repo; do
 
     # Keep the GLPI version targeted by the repository, plugins migrate at their own pace
     glpi_version="$(grep -oP 'glpi-version:\s*"\K[^"]+' "$repo_dir/$ci_file" 2>/dev/null | head -n 1 || true)"
+    # Keep the plugin specific inputs and secrets of the ci job, written after its last common input
+    ci_extra="$(sed '1,/db-image: "\${{ matrix.db-image }}"/d' "$repo_dir/$ci_file" 2>/dev/null || true)"
     cp -r "$files_dir/." "$repo_dir/"
     for file in "${synced_files[@]}"; do
         sed -i -e "s/{PLUGIN}/${name}/g" -e "s/{GLPI_VERSION}/${glpi_version:-$default_glpi_version}/g" "$repo_dir/$file"
     done
+    if [[ -n "$ci_extra" ]]; then
+        printf '%s\n' "$ci_extra" >> "$repo_dir/$ci_file"
+    fi
     # Dependabot fails every run on a missing package.json
     if [[ ! -f "$repo_dir/package.json" ]]; then
         awk 'BEGIN { RS = ""; ORS = "" } !/package-ecosystem: "npm"/ { printf "%s%s", sep, $0; sep = "\n\n" } END { print "\n" }' \

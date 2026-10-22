@@ -19,5 +19,6 @@ The repository is picked up on the next run (push on `main` touching `sync/`, we
 - Edit synced files here, never in the target repositories: local changes are overwritten on the next run.
 - `{PLUGIN}` in a synced file is replaced by the target repository name.
 - `{GLPI_VERSION}` is replaced by the `glpi-version` currently set in the target continuous integration workflow (`11.0.x` when missing).
+- Lines following `db-image` in the target continuous integration workflow (plugin specific inputs and secrets of the `ci` job) are kept.
 - The npm entry of `dependabot.yml` is dropped when the target has no `package.json`.
 - The manual dispatch runs in dry run mode by default and only prints the changes.

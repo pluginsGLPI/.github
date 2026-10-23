@@ -7,6 +7,8 @@ root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 files_dir="$root_dir/sync/files"
 settings_file="$root_dir/sync/settings.json"
 protection_file="$root_dir/sync/branch-protection.json"
+# Maintenance branches protected like the default branch, e.g. 11.0/bugfixes
+bugfixes_pattern='^[0-9.]+/bugfixes$'
 branch="sync/org-files"
 dry_run="${DRY_RUN:-false}"
 owner="${GITHUB_REPOSITORY_OWNER:-pluginsGLPI}"
@@ -65,24 +67,30 @@ while read -r repo; do
         enable_feature "$repo" "$feature"
     done
 
-    # Reads the protection in its PUT shape ({enabled: x} flags unwrapped, extra fields dropped), {} when the branch is not protected
-    protection_url="repos/$repo/branches/$(jq -r .default_branch <<< "$repo_json")/protection"
-    protection_json="$(gh api "$protection_url" 2>/dev/null)" || protection_json='{}'
-    protection_diff="$(jq -r --slurpfile wanted "$protection_file" '
-        def shape($w): if ($w | type) == "object" then (. // {}) as $c | reduce ($w | keys[]) as $k ({}; .[$k] = ($c[$k] | shape($w[$k])))
-            elif type == "object" and has("enabled") then .enabled
-            else . end;
-        $wanted[0] as $wanted | shape($wanted) as $current
-        | [$wanted | keys[] | select($wanted[.] != $current[.])] | join(", ")
-    ' <<< "$protection_json")"
-    if [[ -n "$protection_diff" ]]; then
-        if [[ "$dry_run" == "true" ]]; then
-            echo "$repo: branch protection would be applied ($protection_diff)"
-        else
-            gh api --method PUT "$protection_url" --input "$protection_file" --silent
-            echo "$repo: branch protection applied ($protection_diff)"
+    mapfile -t protected_branches < <(
+        jq -r .default_branch <<< "$repo_json"
+        gh api "repos/$repo/branches?per_page=100" --paginate --jq ".[].name | select(test(\"$bugfixes_pattern\"))"
+    )
+    for protected_branch in "${protected_branches[@]}"; do
+        # Reads the protection in its PUT shape ({enabled: x} flags unwrapped, extra fields dropped), {} when the branch is not protected
+        protection_url="repos/$repo/branches/$protected_branch/protection"
+        protection_json="$(gh api "$protection_url" 2>/dev/null)" || protection_json='{}'
+        protection_diff="$(jq -r --slurpfile wanted "$protection_file" '
+            def shape($w): if ($w | type) == "object" then (. // {}) as $c | reduce ($w | keys[]) as $k ({}; .[$k] = ($c[$k] | shape($w[$k])))
+                elif type == "object" and has("enabled") then .enabled
+                else . end;
+            $wanted[0] as $wanted | shape($wanted) as $current
+            | [$wanted | keys[] | select($wanted[.] != $current[.])] | join(", ")
+        ' <<< "$protection_json")"
+        if [[ -n "$protection_diff" ]]; then
+            if [[ "$dry_run" == "true" ]]; then
+                echo "$repo: $protected_branch protection would be applied ($protection_diff)"
+            else
+                gh api --method PUT "$protection_url" --input "$protection_file" --silent
+                echo "$repo: $protected_branch protection applied ($protection_diff)"
+            fi
         fi
-    fi
+    done
 
     git clone --quiet --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" "$repo_dir"
     default_branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD)"

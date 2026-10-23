@@ -1,0 +1,3 @@
+# Maintenance branches also targeted by Dependabot in every target repository having them
+11.0/bugfixes
+12.0/bugfixes

@@ -23,4 +23,5 @@ The repository is picked up on the next run (push on `main` touching `sync/`, we
 - `{GLPI_VERSION}` is replaced by the `glpi-version` currently set in the target continuous integration workflow (`11.0.x` when missing).
 - Lines following `db-image` in the target continuous integration workflow (plugin specific inputs and secrets of the `ci` job) are kept.
 - The npm entry of `dependabot.yml` is dropped when the target has no `package.json`.
+- Every `dependabot.yml` entry is duplicated with a `target-branch` for each branch of `sync/maintained-branches.txt` existing in the target: add a new `X.Y/bugfixes` branch there when it opens, remove it at its end of life.
 - The manual dispatch runs in dry run mode by default and only prints the changes.

@@ -36,7 +36,7 @@ enable_feature() {
 mapfile -t synced_files < <(cd "$files_dir" && find . -type f)
 repos="$(gh repo list "$owner" --topic "$topic" --no-archived --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner')"
 mapfile -t deleted_paths < <(grep -v -e '^#' -e '^$' "$root_dir/sync/delete.txt")
-
+mapfile -t maintained_list < <(grep -v -e '^#' -e '^$' "$root_dir/sync/maintained-branches.txt")
 while read -r repo; do
     [[ -z "$repo" ]] && continue
     name="${repo#*/}"
@@ -71,10 +71,15 @@ while read -r repo; do
         jq -r .default_branch <<< "$repo_json"
         gh api "repos/$repo/branches?per_page=100" --paginate --jq ".[].name | select(test(\"$bugfixes_pattern\"))"
     )
+    # Listed in sync/maintained-branches.txt, Dependabot targets
+    maintained_branches=()
     for protected_branch in "${protected_branches[@]}"; do
         # Reads the protection in its PUT shape ({enabled: x} flags unwrapped, extra fields dropped), {} when the branch is not protected
         protection_url="repos/$repo/branches/$protected_branch/protection"
         protection_json="$(gh api "$protection_url" 2>/dev/null)" || protection_json='{}'
+        if [[ " ${maintained_list[*]} " == *" $protected_branch "* ]]; then
+            maintained_branches+=("$protected_branch")
+        fi
         protection_diff="$(jq -r --slurpfile wanted "$protection_file" '
             def shape($w): if ($w | type) == "object" then (. // {}) as $c | reduce ($w | keys[]) as $k ({}; .[$k] = ($c[$k] | shape($w[$k])))
                 elif type == "object" and has("enabled") then .enabled
@@ -111,6 +116,26 @@ while read -r repo; do
     if [[ ! -f "$repo_dir/package.json" ]]; then
         awk 'BEGIN { RS = ""; ORS = "" } !/package-ecosystem: "npm"/ { printf "%s%s", sep, $0; sep = "\n\n" } END { print "\n" }' \
             "$repo_dir/.github/dependabot.yml" > "$work_dir/dependabot.yml"
+        mv "$work_dir/dependabot.yml" "$repo_dir/.github/dependabot.yml"
+    fi
+    # Dependabot only targets the default branch, duplicate every entry for the maintained branches
+    if [[ ${#maintained_branches[@]} -gt 0 ]]; then
+        awk -v branches="${maintained_branches[*]}" '
+            BEGIN { RS = ""; ORS = "" }
+            { entries[NR] = $0; printf "%s%s", sep, $0; sep = "\n\n" }
+            END {
+                count = split(branches, targets, " ")
+                for (i = 1; i <= count; i++) {
+                    for (j = 1; j <= NR; j++) {
+                        entry = entries[j]
+                        sub(/^version: [^\n]*\nupdates:\n/, "", entry)
+                        sub(/  # [^\n]*/, "& (" targets[i] ")", entry)
+                        sub(/- package-ecosystem: "[^"]*"/, "&\n    target-branch: \"" targets[i] "\"", entry)
+                        printf "\n\n%s", entry
+                    }
+                }
+                print "\n"
+            }' "$repo_dir/.github/dependabot.yml" > "$work_dir/dependabot.yml"
         mv "$work_dir/dependabot.yml" "$repo_dir/.github/dependabot.yml"
     fi
     for path in "${deleted_paths[@]}"; do

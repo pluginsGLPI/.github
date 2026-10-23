@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Applies sync/settings.json and release immutability, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
+# Applies sync/settings.json, enables release immutability and security features, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
 # Requires GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
 set -euo pipefail
 
@@ -15,6 +15,21 @@ default_glpi_version="11.0.x"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
+# Enables a repository feature exposing GET and PUT on repos/{repo}/{feature}, skipped when already enabled (e.g. enforced by the organization)
+enable_feature() {
+    local repo="$1" feature="$2" response
+    # vulnerability-alerts answers an empty 204 when enabled and 404 when disabled, others return an enabled flag
+    if response="$(gh api "repos/$repo/$feature" 2>/dev/null)" && [[ -z "$response" || "$(jq -r .enabled <<< "$response")" == "true" ]]; then
+        return
+    fi
+    if [[ "$dry_run" == "true" ]]; then
+        echo "$repo: $feature would be enabled"
+    else
+        gh api --method PUT "repos/$repo/$feature" --silent
+        echo "$repo: $feature enabled"
+    fi
+}
+
 mapfile -t synced_files < <(cd "$files_dir" && find . -type f)
 repos="$(gh repo list "$owner" --topic "$topic" --no-archived --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner')"
 mapfile -t deleted_paths < <(grep -v -e '^#' -e '^$' "$root_dir/sync/delete.txt")
@@ -24,7 +39,8 @@ while read -r repo; do
     name="${repo#*/}"
     repo_dir="$work_dir/$name"
 
-    settings_diff="$(gh api "repos/$repo" | jq -c --slurpfile wanted "$settings_file" '. as $current | $wanted[0] | with_entries(select(.value != $current[.key]))')"
+    repo_json="$(gh api "repos/$repo")"
+    settings_diff="$(jq -c --slurpfile wanted "$settings_file" '. as $current | $wanted[0] | with_entries(select(.value != $current[.key]))' <<< "$repo_json")"
     if [[ "$settings_diff" != "{}" ]]; then
         if [[ "$dry_run" == "true" ]]; then
             echo "$repo: settings that would be applied: $settings_diff"
@@ -33,15 +49,14 @@ while read -r repo; do
             echo "$repo: settings applied: $settings_diff"
         fi
     fi
-    # Already enabled when enforced by the organization
-    if [[ "$(gh api "repos/$repo/immutable-releases" --jq .enabled)" != "true" ]]; then
-        if [[ "$dry_run" == "true" ]]; then
-            echo "$repo: release immutability would be enabled"
-        else
-            gh api --method PUT "repos/$repo/immutable-releases" --silent
-            echo "$repo: release immutability enabled"
-        fi
+    # Security updates require vulnerability alerts, private vulnerability reporting only exists on public repositories
+    features=(immutable-releases vulnerability-alerts automated-security-fixes)
+    if [[ "$(jq -r .visibility <<< "$repo_json")" == "public" ]]; then
+        features+=(private-vulnerability-reporting)
     fi
+    for feature in "${features[@]}"; do
+        enable_feature "$repo" "$feature"
+    done
 
     git clone --quiet --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" "$repo_dir"
     default_branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD)"

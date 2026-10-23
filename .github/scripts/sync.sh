@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Applies sync/settings.json, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
+# Applies sync/settings.json and release immutability, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
 # Requires GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
 set -euo pipefail
 
@@ -31,6 +31,15 @@ while read -r repo; do
         else
             gh api --method PATCH "repos/$repo" --input - --silent <<< "$settings_diff"
             echo "$repo: settings applied: $settings_diff"
+        fi
+    fi
+    # Already enabled when enforced by the organization
+    if [[ "$(gh api "repos/$repo/immutable-releases" --jq .enabled)" != "true" ]]; then
+        if [[ "$dry_run" == "true" ]]; then
+            echo "$repo: release immutability would be enabled"
+        else
+            gh api --method PUT "repos/$repo/immutable-releases" --silent
+            echo "$repo: release immutability enabled"
         fi
     fi
 

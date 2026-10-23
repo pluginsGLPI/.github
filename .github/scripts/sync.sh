@@ -40,7 +40,13 @@ while read -r repo; do
     repo_dir="$work_dir/$name"
 
     repo_json="$(gh api "repos/$repo")"
-    settings_diff="$(jq -c --slurpfile wanted "$settings_file" '. as $current | $wanted[0] | with_entries(select(.value != $current[.key]))' <<< "$repo_json")"
+    # The API rejects a commit title or message sent without its counterpart
+    settings_diff="$(jq -c --slurpfile wanted "$settings_file" '
+        . as $current | $wanted[0] as $wanted
+        | ($wanted | with_entries(select(.value != $current[.key]))) as $diff
+        | reduce (["squash_merge_commit_title", "squash_merge_commit_message"], ["merge_commit_title", "merge_commit_message"]) as $pair
+            ($diff; if any($pair[]; in($diff)) then . + ($wanted | with_entries(select(.key | IN($pair[])))) else . end)
+    ' <<< "$repo_json")"
     if [[ "$settings_diff" != "{}" ]]; then
         if [[ "$dry_run" == "true" ]]; then
             echo "$repo: settings that would be applied: $settings_diff"

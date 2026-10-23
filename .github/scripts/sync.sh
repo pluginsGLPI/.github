@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
-# Requires GH_TOKEN (contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
+# Applies sync/settings.json, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
+# Requires GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 files_dir="$root_dir/sync/files"
+settings_file="$root_dir/sync/settings.json"
 branch="sync/org-files"
 dry_run="${DRY_RUN:-false}"
 owner="${GITHUB_REPOSITORY_OWNER:-pluginsGLPI}"
@@ -22,6 +23,16 @@ while read -r repo; do
     [[ -z "$repo" ]] && continue
     name="${repo#*/}"
     repo_dir="$work_dir/$name"
+
+    settings_diff="$(gh api "repos/$repo" | jq -c --slurpfile wanted "$settings_file" '. as $current | $wanted[0] | with_entries(select(.value != $current[.key]))')"
+    if [[ "$settings_diff" != "{}" ]]; then
+        if [[ "$dry_run" == "true" ]]; then
+            echo "$repo: settings that would be applied: $settings_diff"
+        else
+            gh api --method PATCH "repos/$repo" --input - --silent <<< "$settings_diff"
+            echo "$repo: settings applied: $settings_diff"
+        fi
+    fi
 
     git clone --quiet --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" "$repo_dir"
     default_branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD)"

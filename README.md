@@ -5,6 +5,7 @@ Default community health files (issue and pull request templates, security polic
 ## Organization files sync
 
 Files in `sync/files/` are pushed through a pull request to every non archived repository of the organization tagged with the `sync-org-files` topic; paths listed in `sync/delete.txt` are removed from them.
+Repository settings in `sync/settings.json` (any field of the [update a repository](https://docs.github.com/rest/repos/repos#update-a-repository) API) are applied directly to the same repositories.
 
 ### Subscribe a repository
 

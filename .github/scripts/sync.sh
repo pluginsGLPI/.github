@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Applies sync/settings.json and sync/branch-protection.json, enables release immutability and security features, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
+# This repository only gets the settings, security features and branch protection.
 # Requires GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
 set -euo pipefail
 
@@ -13,6 +14,7 @@ branch="sync/org-files"
 dry_run="${DRY_RUN:-false}"
 owner="${GITHUB_REPOSITORY_OWNER:-pluginsGLPI}"
 topic="sync-org-files"
+self_repo="${GITHUB_REPOSITORY:-$owner/.github}"
 ci_file=".github/workflows/continuous-integration.yml"
 default_glpi_version="11.0.x"
 work_dir="$(mktemp -d)"
@@ -35,6 +37,7 @@ enable_feature() {
 
 mapfile -t synced_files < <(cd "$files_dir" && find . -type f)
 repos="$(gh repo list "$owner" --topic "$topic" --no-archived --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner')"
+repos="$(printf '%s\n%s\n' "$self_repo" "$repos" | awk 'NF && !seen[$0]++')"
 mapfile -t deleted_paths < <(grep -v -e '^#' -e '^$' "$root_dir/sync/delete.txt")
 mapfile -t maintained_list < <(grep -v -e '^#' -e '^$' "$root_dir/sync/maintained-branches.txt")
 while read -r repo; do
@@ -96,6 +99,10 @@ while read -r repo; do
             fi
         fi
     done
+    # Synced files are plugin specific and sync/delete.txt would remove the organization defaults
+    if [[ "$repo" == "$self_repo" ]]; then
+        continue
+    fi
 
     git clone --quiet --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" "$repo_dir"
     default_branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD)"

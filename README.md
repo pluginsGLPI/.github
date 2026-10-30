@@ -5,7 +5,7 @@ Default community health files (issue and pull request templates, security polic
 ## Organization files sync
 
 Files in `sync/files/` are pushed through a pull request to every non archived repository of the organization tagged with the `sync-org-files` topic; paths listed in `sync/delete.txt` are removed from them.
-Repository settings in `sync/settings.json` (any field of the [update a repository](https://docs.github.com/rest/repos/repos#update-a-repository) API) are applied directly to the same repositories, along with release immutability, Dependabot alerts and security updates, and private vulnerability reporting (public repositories only).
+Repository settings in `sync/settings.json` (any field of the [update a repository](https://docs.github.com/rest/repos/repos#update-a-repository) API) are applied directly to the same repositories, along with release immutability, Dependabot alerts and security updates, and private vulnerability reporting, secret scanning and push protection (public repositories only).
 The protection of the default branch and of `X.Y/bugfixes` branches is aligned on `sync/branch-protection.json` (body of the [update branch protection](https://docs.github.com/rest/branches/branch-protection#update-branch-protection) API).
 This repository gets the same settings, security features and branch protection, but no synced file nor deletion: its own `dependabot.yml` is maintained by hand.
 
@@ -21,7 +21,7 @@ The repository is picked up on the next run (push on `main` touching `sync/`, we
 
 - Edit synced files here, never in the target repositories: local changes are overwritten on the next run.
 - `{PLUGIN}` in a synced file is replaced by the target repository name.
-- `{GLPI_VERSION}` is replaced by the `glpi-version` currently set in the target continuous integration workflow (`11.0.x` when missing).
+- `{GLPI_VERSION}` is replaced by the `glpi-version` currently set in the target continuous integration workflow (`12.0.x` when missing or not in the `X.Y.x` or `X.Y.Z` format).
 - Lines following `db-image` in the target continuous integration workflow (plugin specific inputs and secrets of the `ci` job) are kept.
 - The npm entry of `dependabot.yml` is dropped when the target has no `package.json`.
 - Every `dependabot.yml` entry is duplicated with a `target-branch` for each branch of `sync/maintained-branches.txt` existing in the target: add a new `X.Y/bugfixes` branch there when it opens, remove it at its end of life.

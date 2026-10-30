@@ -8,6 +8,10 @@ on:
     paths:
       - "setup.php"
 
+# Tags are pushed with AUTOTAG_TOKEN
+permissions:
+  contents: "read"
+
 jobs:
   auto-tag-new-version:
     name: "Automatically tag new version"

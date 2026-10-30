@@ -16,7 +16,7 @@ owner="${GITHUB_REPOSITORY_OWNER:-pluginsGLPI}"
 topic="sync-org-files"
 self_repo="${GITHUB_REPOSITORY:-$owner/.github}"
 ci_file=".github/workflows/continuous-integration.yml"
-default_glpi_version="11.0.x"
+default_glpi_version="12.0.x"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
@@ -63,11 +63,26 @@ while read -r repo; do
     fi
     # Security updates require vulnerability alerts, private vulnerability reporting only exists on public repositories
     features=(immutable-releases vulnerability-alerts automated-security-fixes)
+    # Secret scanning is only free on public repositories, push protection requires it
+    analyses=()
     if [[ "$(jq -r .visibility <<< "$repo_json")" == "public" ]]; then
         features+=(private-vulnerability-reporting)
+        analyses=(secret_scanning secret_scanning_push_protection)
     fi
     for feature in "${features[@]}"; do
         enable_feature "$repo" "$feature"
+    done
+    for analysis in "${analyses[@]}"; do
+        if [[ "$(jq -r --arg analysis "$analysis" '.security_and_analysis[$analysis].status' <<< "$repo_json")" == "enabled" ]]; then
+            continue
+        fi
+        if [[ "$dry_run" == "true" ]]; then
+            echo "$repo: $analysis would be enabled"
+        else
+            jq -n --arg analysis "$analysis" '{security_and_analysis: {($analysis): {status: "enabled"}}}' \
+                | gh api --method PATCH "repos/$repo" --input - --silent
+            echo "$repo: $analysis enabled"
+        fi
     done
 
     mapfile -t protected_branches < <(
@@ -108,8 +123,8 @@ while read -r repo; do
     default_branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD)"
     git -C "$repo_dir" checkout --quiet -b "$branch"
 
-    # Keep the GLPI version targeted by the repository, plugins migrate at their own pace
-    glpi_version="$(grep -oP 'glpi-version:\s*"\K[^"]+' "$repo_dir/$ci_file" 2>/dev/null | head -n 1 || true)"
+    # Keep the GLPI version targeted by the repository, plugins migrate at their own pace; strict format since the value is injected into a sed script
+    glpi_version="$(grep -oP 'glpi-version:\s*"\K[0-9]+\.[0-9]+\.(x|[0-9]+)(?=")' "$repo_dir/$ci_file" 2>/dev/null | head -n 1 || true)"
     # Keep the plugin specific inputs and secrets of the ci job, written after its last common input
     ci_extra="$(sed '1,/db-image: "\${{ matrix.db-image }}"/d' "$repo_dir/$ci_file" 2>/dev/null || true)"
     cp -r "$files_dir/." "$repo_dir/"

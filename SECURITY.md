@@ -14,7 +14,7 @@ You may also provide a script that can be used to check the issue exists.
 
 Once the report will be handled, and if the issue is not yet fixed (or in progress)
 we'll add it to the GitHub security tab, and add you as observer. Meanwhile,
-you will reserve a CVE for the issue.
+we will reserve a CVE for the issue.
 
 Thank you for improving the security of GLPI and its plugins.
 

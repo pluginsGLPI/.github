@@ -125,6 +125,11 @@ while read -r repo; do
 
     # Keep the GLPI version targeted by the repository, plugins migrate at their own pace; strict format since the value is injected into a sed script
     glpi_version="$(grep -oP 'glpi-version:\s*"\K[0-9]+\.[0-9]+\.(x|[0-9]+)(?=")' "$repo_dir/$ci_file" 2>/dev/null | head -n 1 || true)"
+    # Skips "${{ matrix.glpi-version }}" expressions
+    raw_glpi_version="$(grep -oP 'glpi-version:\s*"\K[^"$][^"]*' "$repo_dir/$ci_file" 2>/dev/null | head -n 1 || true)"
+    if [[ -z "$glpi_version" && -n "$raw_glpi_version" ]]; then
+        echo "$repo: unsupported glpi-version \"$raw_glpi_version\", falling back to $default_glpi_version"
+    fi
     # Keep the plugin specific inputs and secrets of the ci job, written after its last common input
     ci_extra="$(sed '1,/db-image: "\${{ matrix.db-image }}"/d' "$repo_dir/$ci_file" 2>/dev/null || true)"
     cp -r "$files_dir/." "$repo_dir/"

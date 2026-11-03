@@ -15,7 +15,7 @@ This repository gets the same settings, security features and branch protection,
 gh repo edit pluginsGLPI/<repository> --add-topic sync-org-files
 ```
 
-The repository is picked up on the next run (push on `main` touching `sync/`, weekly schedule, or manual dispatch of the `Sync organization files` workflow).
+The repository must also be granted to the sync GitHub App installation, otherwise it is skipped; it is picked up on the next run (push on `main` touching `sync/`, weekly schedule, or manual dispatch of the `Sync organization files` workflow).
 
 ### Rules
 

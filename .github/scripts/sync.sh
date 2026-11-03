@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Applies sync/settings.json and sync/branch-protection.json, enables release immutability and security features, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
 # This repository only gets the settings, security features and branch protection.
-# Requires GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
+# Requires a sync app installation token in GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -38,6 +38,10 @@ enable_feature() {
 mapfile -t synced_files < <(cd "$files_dir" && find . -type f)
 repos="$(gh repo list "$owner" --topic "$topic" --no-archived --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner')"
 repos="$(printf '%s\n%s\n' "$self_repo" "$repos" | awk 'NF && !seen[$0]++')"
+# The app installation bounds the sync: a public tagged repository outside it would fail every write and stop the run
+accessible="$(gh api "installation/repositories?per_page=100" --paginate --jq '.repositories[].full_name')"
+repos="$(awk 'NR == FNR { accessible[tolower($0)]; next } tolower($0) in accessible { print; next } { print $0 ": skipped, not accessible to the sync app" > "/dev/stderr" }' \
+    <(printf '%s\n' "$accessible") <(printf '%s\n' "$repos"))"
 mapfile -t deleted_paths < <(grep -v -e '^#' -e '^$' "$root_dir/sync/delete.txt")
 mapfile -t maintained_list < <(grep -v -e '^#' -e '^$' "$root_dir/sync/maintained-branches.txt")
 while read -r repo; do

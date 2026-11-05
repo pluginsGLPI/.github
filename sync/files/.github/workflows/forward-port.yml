@@ -12,9 +12,9 @@ jobs:
   forward-port:
     name: "Forward-port"
     runs-on: "ubuntu-latest"
+    # Write operations use the app token: `GITHUB_TOKEN` only lists the protected branches.
     permissions:
-      contents: "write"
-      pull-requests: "write"
+      contents: "read"
     # Pull requests opened by bots (dependabot, translations updates, ...) are handled on each branch separately,
     # except the forward-port pull requests, so that a fix goes up the whole branches chain.
     if: |
@@ -53,10 +53,12 @@ jobs:
           if [[ "${HEAD_BRANCH}" == forward-port/* ]]; then
             TITLE="${TITLE#\[*\] }"
           fi
+          # Random delimiter, so that no pull request title can end the block early.
+          DELIMITER=$(openssl rand -hex 16)
           {
-            echo "title<<EOF"
+            echo "title<<${DELIMITER}"
             echo "${TITLE}"
-            echo "EOF"
+            echo "${DELIMITER}"
           } >> "$GITHUB_OUTPUT"
 
       # Pull requests opened with the workflow `GITHUB_TOKEN` do not trigger the CI: the org bot app is used instead.

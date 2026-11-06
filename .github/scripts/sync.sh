@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Applies sync/settings.json and sync/branch-protection.json, enables release immutability and security features, propagates sync/files/, propagates sync/files-public/ to public repositories and removes it from private ones, and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
+# Applies sync/settings.json and sync/branch-protection.json, enables release immutability and security features, creates or updates sync/labels.json labels, propagates sync/files/, propagates sync/files-public/ to public repositories and removes it from private ones, and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
 # This repository only gets the settings, security features and branch protection.
 # Requires a sync app installation token in GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
 set -euo pipefail
@@ -10,6 +10,7 @@ files_dir="$root_dir/sync/files"
 public_files_dir="$root_dir/sync/files-public"
 settings_file="$root_dir/sync/settings.json"
 protection_file="$root_dir/sync/branch-protection.json"
+labels_file="$root_dir/sync/labels.json"
 # Maintenance branches protected like the default branch, e.g. 11.0/bugfixes
 bugfixes_pattern='^[0-9.]+/bugfixes$'
 branch="sync/org-files"
@@ -127,6 +128,26 @@ while read -r repo; do
     if [[ "$repo" == "$self_repo" ]]; then
         continue
     fi
+
+    # Label names are case insensitive, extra labels of the repository are kept
+    current_labels="$(gh api "repos/$repo/labels?per_page=100" --paginate --jq '.[] | {name, color, description}' | jq -s .)"
+    while read -r label; do
+        current_label="$(jq -c --argjson label "$label" 'map(select((.name | ascii_downcase) == ($label.name | ascii_downcase)))[0] // empty' <<< "$current_labels")"
+        if [[ -z "$current_label" ]]; then
+            method="POST" url="repos/$repo/labels" action="created" body="$label"
+        elif [[ "$current_label" != "$label" ]]; then
+            method="PATCH" url="repos/$repo/labels/$(jq -r '.name | @uri' <<< "$current_label")" action="updated"
+            body="$(jq -c '{new_name: .name, color, description}' <<< "$label")"
+        else
+            continue
+        fi
+        if [[ "$dry_run" == "true" ]]; then
+            echo "$repo: label would be $action: $label"
+        else
+            gh api --method "$method" "$url" --input - --silent <<< "$body"
+            echo "$repo: label $action: $label"
+        fi
+    done < <(jq -c '.[] | {name, color, description}' "$labels_file")
 
     git clone --quiet --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" "$repo_dir"
     default_branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD)"

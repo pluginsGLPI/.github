@@ -9,7 +9,8 @@ Files in `sync/files-public/` are pushed the same way to public repositories onl
 After each successful run of the automatic tag workflow, the synced `open-xml-update-pr.yml` workflow opens a pull request copying the `<version>` block of the matching tag's plugin XML (`plugin.xml` or `<plugin_key>.xml`) to the default branch, with the `GLPI_PROJECT_BOT` GitHub App, which needs the pull requests write permission.
 Repository settings in `sync/settings.json` (any field of the [update a repository](https://docs.github.com/rest/repos/repos#update-a-repository) API) are applied directly to the same repositories, along with release immutability, Dependabot alerts and security updates, and private vulnerability reporting, secret scanning and push protection (public repositories only).
 The protection of the default branch and of `X.Y/bugfixes` branches is aligned on `sync/branch-protection.json` (body of the [update branch protection](https://docs.github.com/rest/branches/branch-protection#update-branch-protection) API).
-This repository gets the same settings, security features and branch protection, but no synced file nor deletion: its own `dependabot.yml` is maintained by hand.
+Labels in `sync/labels.json` (`name`, `color` and `description`) are created, or updated when their color or description differs; other labels of the repositories are kept.
+This repository gets the same settings, security features and branch protection, but no label, synced file nor deletion: its own `dependabot.yml` is maintained by hand.
 
 ### Subscribe a repository
 
@@ -27,4 +28,6 @@ The repository must also be granted to the sync GitHub App installation, otherwi
 - Lines following `db-image` in the target continuous integration workflow (plugin specific inputs and secrets of the `ci` job) are kept.
 - The npm entry of `dependabot.yml` is dropped when the target has no `package.json`.
 - Every `dependabot.yml` entry is duplicated with a `target-branch` for each branch of `sync/maintained-branches.txt` existing in the target: add a new `X.Y/bugfixes` branch there when it opens, remove it at its end of life.
+- Pull requests merged into a branch are forward-ported to the next one, the protected `X.Y/bugfixes` branches sorted by version then the default branch: the chain follows new branches without any change here. Pull requests labelled `no forward-port` or opened by bots (except forward-port pull requests) are skipped.
+- To add a label, append it to `sync/labels.json`; renaming one there creates a new label and leaves the old one in place.
 - The manual dispatch runs in dry run mode by default and only prints the changes.

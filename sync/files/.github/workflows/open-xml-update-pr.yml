@@ -57,13 +57,22 @@ jobs:
               return;
             }
             const tagRef = `refs/tags/${tag}`;
+            let ref;
             try {
-              await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              ({ data: ref } = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` }));
             } catch (error) {
               if (error.status !== 404) {
                 throw error;
               }
               core.info(`No ${tag} tag, skipping update.`);
+              return;
+            }
+            // Any setup.php push succeeds the auto tag run, only a tag on the triggering commit is a fresh one
+            const tagSha = ref.object.type === 'tag'
+              ? (await github.rest.git.getTag({ owner, repo, tag_sha: ref.object.sha })).data.object.sha
+              : ref.object.sha;
+            if (tagSha !== process.env.HEAD_SHA) {
+              core.info(`${tag} was not created by this run, skipping update.`);
               return;
             }
 

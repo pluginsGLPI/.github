@@ -5,6 +5,8 @@ Default community health files (issue and pull request templates, security polic
 ## Organization files sync
 
 Files in `sync/files/` are pushed through a pull request to every non archived repository of the organization tagged with the `sync-org-files` topic; paths listed in `sync/delete.txt` are removed from them.
+Files in `sync/files-public/` are pushed the same way to public repositories only, and removed from private ones.
+After each successful run of the automatic tag workflow, the synced `open-xml-update-pr.yml` workflow opens a pull request copying the `<version>` block of the matching tag's plugin XML (`plugin.xml` or `<plugin_key>.xml`) to the default branch, with the `GLPI_PROJECT_BOT` GitHub App, which needs the pull requests write permission.
 Repository settings in `sync/settings.json` (any field of the [update a repository](https://docs.github.com/rest/repos/repos#update-a-repository) API) are applied directly to the same repositories, along with release immutability, Dependabot alerts and security updates, and private vulnerability reporting, secret scanning and push protection (public repositories only).
 The protection of the default branch and of `X.Y/bugfixes` branches is aligned on `sync/branch-protection.json` (body of the [update branch protection](https://docs.github.com/rest/branches/branch-protection#update-branch-protection) API).
 This repository gets the same settings, security features and branch protection, but no synced file nor deletion: its own `dependabot.yml` is maintained by hand.

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Applies sync/settings.json and sync/branch-protection.json, enables release immutability and security features, propagates sync/files/ and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
+# Applies sync/settings.json and sync/branch-protection.json, enables release immutability and security features, propagates sync/files/, propagates sync/files-public/ to public repositories and removes it from private ones, and removes sync/delete.txt paths in every repository tagged with the sync topic through a pull request.
 # This repository only gets the settings, security features and branch protection.
 # Requires a sync app installation token in GH_TOKEN (administration, contents, pull requests and workflows write access); DRY_RUN=true only prints the changes.
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 files_dir="$root_dir/sync/files"
+# Only for public repositories, removed from private ones
+public_files_dir="$root_dir/sync/files-public"
 settings_file="$root_dir/sync/settings.json"
 protection_file="$root_dir/sync/branch-protection.json"
 # Maintenance branches protected like the default branch, e.g. 11.0/bugfixes
@@ -36,6 +38,7 @@ enable_feature() {
 }
 
 mapfile -t synced_files < <(cd "$files_dir" && find . -type f)
+mapfile -t public_files < <(cd "$public_files_dir" && find . -type f)
 repos="$(gh repo list "$owner" --topic "$topic" --no-archived --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner')"
 repos="$(printf '%s\n%s\n' "$self_repo" "$repos" | awk 'NF && !seen[$0]++')"
 # The app installation bounds the sync: a public tagged repository outside it would fail every write and stop the run
@@ -69,7 +72,9 @@ while read -r repo; do
     features=(immutable-releases vulnerability-alerts automated-security-fixes)
     # Secret scanning is only free on public repositories, push protection requires it
     analyses=()
+    is_public="false"
     if [[ "$(jq -r .visibility <<< "$repo_json")" == "public" ]]; then
+        is_public="true"
         features+=(private-vulnerability-reporting)
         analyses=(secret_scanning secret_scanning_push_protection)
     fi
@@ -137,7 +142,15 @@ while read -r repo; do
     # Keep the plugin specific inputs and secrets of the ci job, written after its last common input
     ci_extra="$(sed '1,/db-image: "\${{ matrix.db-image }}"/d' "$repo_dir/$ci_file" 2>/dev/null || true)"
     cp -r "$files_dir/." "$repo_dir/"
-    for file in "${synced_files[@]}"; do
+    repo_files=("${synced_files[@]}")
+    repo_deleted_paths=("${deleted_paths[@]}")
+    if [[ "$is_public" == "true" ]]; then
+        cp -r "$public_files_dir/." "$repo_dir/"
+        repo_files+=("${public_files[@]}")
+    else
+        repo_deleted_paths+=("${public_files[@]}")
+    fi
+    for file in "${repo_files[@]}"; do
         sed -i -e "s/{PLUGIN}/${name}/g" -e "s/{GLPI_VERSION}/${glpi_version:-$default_glpi_version}/g" "$repo_dir/$file"
     done
     if [[ -n "$ci_extra" ]]; then
@@ -169,7 +182,7 @@ while read -r repo; do
             }' "$repo_dir/.github/dependabot.yml" > "$work_dir/dependabot.yml"
         mv "$work_dir/dependabot.yml" "$repo_dir/.github/dependabot.yml"
     fi
-    for path in "${deleted_paths[@]}"; do
+    for path in "${repo_deleted_paths[@]}"; do
         git -C "$repo_dir" rm -r --quiet --ignore-unmatch -- "$path"
     done
 

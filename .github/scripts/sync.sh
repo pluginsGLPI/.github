@@ -54,6 +54,14 @@ while read -r repo; do
     repo_dir="$work_dir/$name"
 
     repo_json="$(gh api "repos/$repo")"
+    # Merge settings are hidden from tokens without contents write, such as the read-only pull request dry run token: settings missing from the response count as applied
+    if [[ "$dry_run" == "true" && "$(jq '.allow_merge_commit == null' <<< "$repo_json")" == "true" ]]; then
+        if [[ -z "${hidden_settings_reported:-}" ]]; then
+            echo "merge settings not visible with a read-only token, skipped"
+            hidden_settings_reported="true"
+        fi
+        repo_json="$(jq --slurpfile wanted "$settings_file" '$wanted[0] + with_entries(select(.value != null))' <<< "$repo_json")"
+    fi
     # The API rejects a commit title or message sent without its counterpart
     settings_diff="$(jq -c --slurpfile wanted "$settings_file" '
         . as $current | $wanted[0] as $wanted

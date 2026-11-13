@@ -18,5 +18,10 @@
         "name": "feature suggestion",
         "color": "0E8A16",
         "description": ""
+    },
+    {
+        "name": "need more information",
+        "color": "d876e3",
+        "description": "Waiting for information from the issue author"
     }
 ]

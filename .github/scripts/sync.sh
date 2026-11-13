@@ -129,10 +129,10 @@ while read -r repo; do
         continue
     fi
 
-    # Label names are case insensitive, extra labels of the repository are kept
-    current_labels="$(gh api "repos/$repo/labels?per_page=100" --paginate --jq '.[] | {name, color, description}' | jq -s .)"
+    # Label names are case insensitive, extra labels of the repository are kept; keys are sorted and a null description is empty so unchanged labels compare equal
+    current_labels="$(gh api "repos/$repo/labels?per_page=100" --paginate --jq '.[] | {name, color, description: (.description // "")}' | jq -s .)"
     while read -r label; do
-        current_label="$(jq -c --argjson label "$label" 'map(select((.name | ascii_downcase) == ($label.name | ascii_downcase)))[0] // empty' <<< "$current_labels")"
+        current_label="$(jq -cS --argjson label "$label" 'map(select((.name | ascii_downcase) == ($label.name | ascii_downcase)))[0] // empty' <<< "$current_labels")"
         if [[ -z "$current_label" ]]; then
             method="POST" url="repos/$repo/labels" action="created" body="$label"
         elif [[ "$current_label" != "$label" ]]; then
@@ -147,7 +147,7 @@ while read -r repo; do
             gh api --method "$method" "$url" --input - --silent <<< "$body"
             echo "$repo: label $action: $label"
         fi
-    done < <(jq -c '.[] | {name, color, description}' "$labels_file")
+    done < <(jq -cS '.[] | {name, color, description: (.description // "")}' "$labels_file")
 
     git clone --quiet --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${repo}.git" "$repo_dir"
     default_branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD)"

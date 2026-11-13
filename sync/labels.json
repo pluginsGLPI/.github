@@ -3,5 +3,20 @@
         "name": "no forward-port",
         "color": "cfd3d7",
         "description": "Do not forward-port this pull request to the next branch"
+    },
+    {
+        "name": "invalid",
+        "color": "e4e669",
+        "description": "This doesn't seem right"
+    },
+    {
+        "name": "support",
+        "color": "06ECC1",
+        "description": ""
+    },
+    {
+        "name": "feature suggestion",
+        "color": "0E8A16",
+        "description": ""
     }
 ]

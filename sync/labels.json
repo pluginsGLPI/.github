@@ -20,8 +20,18 @@
         "description": ""
     },
     {
-        "name": "need more information",
-        "color": "d876e3",
+        "name": "need feedback",
+        "color": "fef2c0",
         "description": "Waiting for information from the issue author"
+    },
+    {
+        "name": "not reproducible",
+        "color": "c5def5",
+        "description": "Could not be reproduced on the latest release"
+    },
+    {
+        "name": "security report",
+        "color": "b60205",
+        "description": "Security problem reported publicly instead of privately"
     }
 ]

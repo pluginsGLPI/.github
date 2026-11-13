@@ -1,4 +1,4 @@
-name: "Need more information"
+name: "Need feedback"
 
 on:
   issue_comment:
@@ -10,14 +10,14 @@ jobs:
     if: >-
       github.repository == 'pluginsGLPI/{PLUGIN}'
       && github.event.comment.user.login == github.event.issue.user.login
-      && contains(github.event.issue.labels.*.name, 'need more information')
+      && contains(github.event.issue.labels.*.name, 'need feedback')
     permissions:
       issues: "write"
     runs-on: "ubuntu-latest"
     steps:
-      - name: "Remove the need more information label"
+      - name: "Remove the need feedback label"
         env:
           GH_TOKEN: "${{ github.token }}"
           GH_REPO: "${{ github.repository }}"
           ISSUE_NUMBER: "${{ github.event.issue.number }}"
-        run: gh issue edit "$ISSUE_NUMBER" --remove-label "need more information"
+        run: gh issue edit "$ISSUE_NUMBER" --remove-label "need feedback"

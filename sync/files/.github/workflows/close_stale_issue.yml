@@ -28,7 +28,7 @@ jobs:
           days-before-issue-stale: 60
           days-before-pr-stale: 90
           days-before-close: 14
-          exempt-issue-labels: "bug,enhancement,question,security,need more information" # Issues with "bug", "enhancement", "question" or "security" labels will not be marked as stale, "need more information" ones are handled by the next step
+          exempt-issue-labels: "bug,enhancement,question,security,need feedback" # Issues with "bug", "enhancement", "question" or "security" labels will not be marked as stale, "need feedback" ones are handled by the next step
           exempt-pr-labels: "security" # PR with "security" label will not be marked as stale
           exempt-draft-pr: true # Draft PR are work in progress.
           exempt-all-milestones: true # Do not check issues/PR with defined milestone.
@@ -37,7 +37,7 @@ jobs:
       # Shares the "_state" cache of the step above, harmless as long as each run processes every issue
       - uses: "actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93" # v11.0.0
         with:
-          only-labels: "need more information"
+          only-labels: "need feedback"
           stale-issue-message: >-
             The requested information has not been provided for 30 days,
             this issue will be closed automatically in 14 days.

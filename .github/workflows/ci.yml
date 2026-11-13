@@ -1,0 +1,67 @@
+name: "Continuous integration"
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: "read"
+
+jobs:
+  lint:
+    name: "Lint"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
+        with:
+          persist-credentials: false
+      - name: "Lint workflows"
+        # Synced workflows are not under .github/workflows, so they are listed explicitly
+        run: |
+          docker run --rm --volume "$PWD:/repo" --workdir /repo \
+            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+            -color .github/workflows/*.yml sync/files/.github/workflows/*.yml sync/files-public/.github/workflows/*.yml
+      - name: "Lint shell scripts"
+        run: |
+          docker run --rm --volume "$PWD:/mnt" --workdir /mnt \
+            koalaman/shellcheck@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d \
+            .github/scripts/*.sh
+      - name: "Validate JSON files"
+        run: |
+          for file in sync/*.json; do
+            jq empty "$file"
+          done
+
+  sync-dry-run:
+    name: "Sync dry run"
+    # Fork pull requests get no secrets
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
+        with:
+          persist-credentials: false
+      - name: "Generate read-only app token"
+        id: "app-token"
+        uses: "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510" # v3.3.0
+        with:
+          client-id: "${{ vars.SYNC_APP_CLIENT_ID }}"
+          private-key: "${{ secrets.SYNC_APP_PRIVATE_KEY }}"
+          owner: "${{ github.repository_owner }}"
+          # The pull request runs unreviewed code, read access keeps it from writing to the synced repositories
+          permission-administration: "read"
+          permission-contents: "read"
+          permission-pull-requests: "read"
+      - name: "Show sync changes"
+        run: ".github/scripts/sync.sh"
+        env:
+          GH_TOKEN: "${{ steps.app-token.outputs.token }}"
+          DRY_RUN: "true"

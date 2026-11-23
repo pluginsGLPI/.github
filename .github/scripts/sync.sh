@@ -190,12 +190,36 @@ while read -r repo; do
     for file in "${repo_files[@]}"; do
         sed -i -e "s/{PLUGIN}/${name}/g" -e "s/{GLPI_VERSION}/${glpi_version:-$default_glpi_version}/g" "$repo_dir/$file"
         if [[ -f "$pins_dir/$file" ]]; then
-            # Replaces everything after "action@" with the repository value, version comment included
+            # Replaces everything after "action@" with the repository value, version comment included, unless the template version is higher
             awk '
+                # Version from the "# vX.Y.Z" comment, else from a "@vN" tag, empty when unknown
+                function version(ref, v) {
+                    if (match(ref, /# v?[0-9]+(\.[0-9]+)*/)) {
+                        v = substr(ref, RSTART + 2, RLENGTH - 2)
+                    } else if (match(ref, /^v?[0-9]+(\.[0-9]+)*"/)) {
+                        v = substr(ref, RSTART, RLENGTH - 1)
+                    }
+                    sub(/^v/, "", v)
+                    return v
+                }
+                function at_least(a, b, x, y, n, i) {
+                    n = split(a, x, ".")
+                    if (split(b, y, ".") > n) { n = split(b, y, ".") }
+                    for (i = 1; i <= n; i++) {
+                        if (x[i] + 0 != y[i] + 0) { return x[i] + 0 > y[i] + 0 }
+                    }
+                    return 1
+                }
                 match($0, /uses: "[^"@]+@/) {
+                    prefix = substr($0, 1, RSTART + RLENGTH - 1)
                     action = substr($0, RSTART, RLENGTH)
-                    if (FNR == NR) { pins[action] = substr($0, RSTART + RLENGTH); next }
-                    if (action in pins) { $0 = substr($0, 1, RSTART + RLENGTH - 1) pins[action] }
+                    ref = substr($0, RSTART + RLENGTH)
+                    if (FNR == NR) { pins[action] = ref; next }
+                    if (action in pins) {
+                        pinned = version(pins[action])
+                        template = version(ref)
+                        if (pinned != "" && template != "" && at_least(pinned, template)) { $0 = prefix pins[action] }
+                    }
                 }
                 FNR != NR { print }
             ' "$pins_dir/$file" "$repo_dir/$file" > "$work_dir/pinned"

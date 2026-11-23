@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: "github-actions"
     directories:
       - "/"
-      - "/sync/files"
-      - "/sync/files-public"
+      - "/sync/files/.github/workflows"
+      - "/sync/files-public/.github/workflows"
     schedule:
       interval: "monthly"

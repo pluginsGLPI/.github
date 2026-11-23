@@ -27,7 +27,7 @@ The repository must also be granted to the sync GitHub App installation, otherwi
 - `{PLUGIN}` in a synced file is replaced by the target repository name.
 - `{GLPI_VERSION}` is replaced by the `glpi-version` currently set in the target continuous integration workflow (`12.0.x` when missing or not in the `X.Y.x` or `X.Y.Z` format).
 - Lines following `db-image` in the target continuous integration workflow (plugin specific inputs and secrets of the `ci` job) are kept.
-- Action references (`uses: "owner/action@ref" # version`) already set in a target file are kept, so the target Dependabot updates them without conflicting with the sync pull request; references set here only apply to targets missing the action, and this repository's Dependabot keeps them up to date.
+- Action references (`uses: "owner/action@ref" # version`) already set in a target file are kept when their version is not lower than the one set here, so the target Dependabot updates them without conflicting with the sync pull request; otherwise, or when either version is unknown, the reference set here applies, and this repository's Dependabot keeps it up to date.
 - The npm entry of `dependabot.yml` is dropped when the target has no `package.json`.
 - Every `dependabot.yml` entry is duplicated with a `target-branch` for each branch of `sync/maintained-branches.txt` existing in the target: add a new `X.Y/bugfixes` branch there when it opens, remove it at its end of life.
 - Pull requests merged into a branch are forward-ported to the next one, the protected `X.Y/bugfixes` branches sorted by version then the default branch: the chain follows new branches without any change here. Pull requests labelled `no forward-port` or opened by bots (except forward-port pull requests) are skipped.

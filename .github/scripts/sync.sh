@@ -170,6 +170,14 @@ while read -r repo; do
     fi
     # Keep the plugin specific inputs and secrets of the ci job, written after its last common input
     ci_extra="$(sed '1,/db-image: "\${{ matrix.db-image }}"/d' "$repo_dir/$ci_file" 2>/dev/null || true)"
+    # Keep the action references of the repository, its Dependabot updates them on every branch without conflicting with this pull request
+    pins_dir="$work_dir/$name-pins"
+    for file in "${synced_files[@]}" "${public_files[@]}"; do
+        if [[ -s "$repo_dir/$file" ]]; then
+            mkdir -p "$pins_dir/$(dirname "$file")"
+            cp "$repo_dir/$file" "$pins_dir/$file"
+        fi
+    done
     cp -r "$files_dir/." "$repo_dir/"
     repo_files=("${synced_files[@]}")
     repo_deleted_paths=("${deleted_paths[@]}")
@@ -181,6 +189,42 @@ while read -r repo; do
     fi
     for file in "${repo_files[@]}"; do
         sed -i -e "s/{PLUGIN}/${name}/g" -e "s/{GLPI_VERSION}/${glpi_version:-$default_glpi_version}/g" "$repo_dir/$file"
+        if [[ -f "$pins_dir/$file" ]]; then
+            # Replaces everything after "action@" with the repository value, version comment included, unless the template version is higher
+            awk '
+                # Version from the "# vX.Y.Z" comment, else from a "@vN" tag, empty when unknown
+                function version(ref, v) {
+                    if (match(ref, /# v?[0-9]+(\.[0-9]+)*/)) {
+                        v = substr(ref, RSTART + 2, RLENGTH - 2)
+                    } else if (match(ref, /^v?[0-9]+(\.[0-9]+)*"/)) {
+                        v = substr(ref, RSTART, RLENGTH - 1)
+                    }
+                    sub(/^v/, "", v)
+                    return v
+                }
+                function at_least(a, b, x, y, n, i) {
+                    n = split(a, x, ".")
+                    if (split(b, y, ".") > n) { n = split(b, y, ".") }
+                    for (i = 1; i <= n; i++) {
+                        if (x[i] + 0 != y[i] + 0) { return x[i] + 0 > y[i] + 0 }
+                    }
+                    return 1
+                }
+                match($0, /uses: "[^"@]+@/) {
+                    prefix = substr($0, 1, RSTART + RLENGTH - 1)
+                    action = substr($0, RSTART, RLENGTH)
+                    ref = substr($0, RSTART + RLENGTH)
+                    if (FNR == NR) { pins[action] = ref; next }
+                    if (action in pins) {
+                        pinned = version(pins[action])
+                        template = version(ref)
+                        if (pinned != "" && template != "" && at_least(pinned, template)) { $0 = prefix pins[action] }
+                    }
+                }
+                FNR != NR { print }
+            ' "$pins_dir/$file" "$repo_dir/$file" > "$work_dir/pinned"
+            cat "$work_dir/pinned" > "$repo_dir/$file"
+        fi
     done
     if [[ -n "$ci_extra" ]]; then
         printf '%s\n' "$ci_extra" >> "$repo_dir/$ci_file"
